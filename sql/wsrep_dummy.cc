@@ -16,6 +16,7 @@
 #include "mariadb.h"
 #include <sql_class.h>
 #include <mysql/service_wsrep.h>
+#include "wsrep_mysqld.h"
 
 my_bool wsrep_thd_is_BF(THD *, my_bool)
 { return 0; }
