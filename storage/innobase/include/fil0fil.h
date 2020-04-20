@@ -73,7 +73,10 @@ range_t() : first_val(0), last_val(0) {}
 range_t (uint32_t st_val) { first_val = last_val = st_val; }
 range_t (uint32_t st_val,
          uint32_t end_val) : first_val (st_val),last_val(end_val) {}
-
+range_t(const range_t& o) : first_val(o.first_val), last_val(o.last_val)
+	{}
+range_t(range_t&& o) : first_val(std::move(o.first_val)),
+		       last_val(std::move(o.last_val)) {}
 uint32_t& last() const { return last_val; }
 void set_last(uint32_t val) const { last_val = val; }
 void set_first(uint32_t val) const { first_val = val; }
@@ -284,7 +287,11 @@ struct fil_space_t
 	/** @return last_freed_lsn */
 	lsn_t get_last_freed_lsn() { return last_freed_lsn; }
 	/** Update last_freed_lsn */
-	void update_last_freed_lsn(lsn_t lsn) { last_freed_lsn= lsn; }
+	void update_last_freed_lsn(lsn_t lsn)
+	{
+          std::lock_guard<std::mutex>	freed_lock(freed_mutex);
+	  last_freed_lsn= lsn;
+	}
 #endif /* !UNIV_INNOCHECKSUM */
 	/** FSP_SPACE_FLAGS and FSP_FLAGS_MEM_ flags;
 	check fsp0types.h to more info about flags. */
@@ -561,7 +568,7 @@ struct fil_space_t
     if (range == freed_ranges->begin())
       return;
 
-    range_set_t::iterator prev_range = std::prev(range, 1);
+    auto prev_range = std::prev(range, 1);
     if ((*range).first() != (*prev_range).last() + 1)
       return;
 
@@ -590,14 +597,14 @@ struct fil_space_t
   {
     std::lock_guard<std::mutex>	freed_lock(freed_mutex);
     range_t new_range(offset);
-    range_set_t::iterator r_offset = freed_ranges->lower_bound(new_range);
+    auto r_offset = freed_ranges->lower_bound(new_range);
 
-    if (freed_ranges->size() == 0)
+    if (freed_ranges->empty())
       return;
 
     if (r_offset == freed_ranges->end())
     {
-      range_set_t::reverse_iterator rlast = freed_ranges->rbegin();
+      auto rlast = freed_ranges->rbegin();
       uint32_t& last_end_val = (*rlast).last();
       if (last_end_val == offset)
         last_end_val--;
@@ -612,7 +619,7 @@ struct fil_space_t
     if (start_val > offset)
     {
       /* Iterate the previous ranges to delete */
-      range_set_t::iterator prev_last = std::prev(r_offset, 1);
+      auto prev_last = std::prev(r_offset, 1);
       uint32_t& prev_last_end= (*prev_last).last();
       
       if (prev_last_end == offset)
@@ -637,19 +644,20 @@ struct fil_space_t
 
   void add_free_page(uint32_t offset)
   {
-    std::lock_guard<std::mutex>	freed_lock(freed_mutex);
     range_t new_range(offset);
-    range_set_t::iterator r_offset = freed_ranges->lower_bound(new_range);
-    range_set_t::reverse_iterator rlast = freed_ranges->rbegin();
+    std::lock_guard<std::mutex>	freed_lock(freed_mutex);
+    auto r_offset = freed_ranges->lower_bound(new_range);
+    auto rlast= freed_ranges->rbegin();
+    auto rend= freed_ranges->rend();
 
-    if (freed_ranges->size() == 0)
+    if (rlast == rend)
     {
 new_range:
       freed_ranges->insert(offset);
       return;
     }
 
-    if (r_offset == freed_ranges->end() && rlast != freed_ranges->rend())
+    if (r_offset == freed_ranges->end() && rlast != rend)
     {
       uint32_t& last_end_val = (*rlast).last();
       if (last_end_val + 1 < offset)
@@ -669,14 +677,30 @@ new_range:
     else
     {
       /* previous range last_value alone */
-      range_set_t::iterator prev_last = std::prev(r_offset, 1);
+      auto prev_last = std::prev(r_offset, 1);
       uint32_t& last_val = (*prev_last).last();
       if (last_val + 1 == offset)
         last_val++;
       else
-        /* Insert new range */
-      goto new_range;
+        goto new_range;
     }
+  }
+
+  void display_freed_pages()
+  {
+    if (freed_ranges->size() == 0)
+      return;
+    fprintf(stderr, "space id %ld ", id);
+    std::lock_guard<std::mutex>	freed_lock(freed_mutex);
+    for (range_set_t::iterator it = freed_ranges->begin();
+	 it != freed_ranges->end(); it++)
+    {
+      fprintf(stderr, "range low %d high %d\n",
+	      it->first(), it->last());
+    }
+
+    freed_ranges->clear();
+    fprintf(stderr, "space end\n"); 
   }
 #endif
 };

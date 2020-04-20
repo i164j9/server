@@ -580,12 +580,12 @@ public:
                           const char *new_path= nullptr);
 
   /** Add freed page numbers to freed_pages */
-  inline void add_freed_pages(uint32_t page_no)
+  void add_freed_pages(uint32_t page_no)
   {
     freed_pages.push_back(page_no);
   }
 
-  inline void clear_freed_pages() { freed_pages.clear(); }
+  void clear_freed_pages() { freed_pages.clear(); }
 private:
   /** Log a write of a byte string to a page.
   @param block   buffer page
