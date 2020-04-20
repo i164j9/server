@@ -25,11 +25,12 @@ SELECT * FROM t1;
 --connection node_2
 INSERT INTO t1 VALUES (1,1);
 
-#
-# Here we can't check table contents as it will be a conflictring
-# transaction to the same table
-#
---sleep 2
+--connect node_1a, 127.0.0.1, root, , test, $NODE_MYPORT_1
+--connection node_1a
+--let $wait_condition = SELECT COUNT(*) = 1 FROM t1;
+--error 0,ER_LOCK_DEADLOCK
+--source include/wait_condition.inc
+
 --connection node_1
 --error ER_LOCK_DEADLOCK
 SELECT * FROM t1;
@@ -49,11 +50,11 @@ SELECT * FROM t1;
 --connection node_2
 UPDATE t1 SET f2 = 2;
 
-#
-# Here we can't check table contents as it will be a conflictring
-# transaction to the same table
-#
---sleep 2
+--connection node_1a
+--let $wait_condition = SELECT COUNT(*) = 1 FROM t1;
+--error 0,ER_LOCK_DEADLOCK
+--source include/wait_condition.inc
+
 --connection node_1
 --error ER_LOCK_DEADLOCK
 UPDATE t1 SET f2 = 3;
@@ -91,3 +92,5 @@ SELECT * from t1;
 SELECT * from t1;
 
 DROP TABLE t1;
+
+--disconnect node_1a
