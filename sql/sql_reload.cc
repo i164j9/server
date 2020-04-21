@@ -153,7 +153,7 @@ bool reload_acl_and_cache(THD *thd, unsigned long long options,
       if (mysql_bin_log.rotate_and_purge(true, drop_gtid_domain))
         *write_to_binlog= -1;
 
-      if (WSREP_ON)
+      if (WSREP(thd))
       {
         /* Wait for last binlog checkpoint event to be logged. */
         mysql_bin_log.wait_for_last_checkpoint_event();
