@@ -155,9 +155,7 @@ bool reload_acl_and_cache(THD *thd, unsigned long long options,
 
       if (WSREP_ON)
       {
-        assert(WSREP_ON);
-        assert(WSREP(current_thd));
-        /* Wait for last binlog checkpoint event to be logged. */
+          /* Wait for last binlog checkpoint event to be logged. */
         mysql_bin_log.wait_for_last_checkpoint_event();
       }
     }

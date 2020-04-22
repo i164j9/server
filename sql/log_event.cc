@@ -4343,10 +4343,10 @@ Query_log_event::Query_log_event(THD* thd_arg, const char* query_arg, size_t que
     If Query_log_event will contain non trans keyword (not BEGIN, COMMIT,
     SAVEPOINT or ROLLBACK) we disable PA for this transaction.
    */
-    assert(WSREP_ON);
-    assert(WSREP(thd));
-  if (WSREP(thd) && !is_trans_keyword())
+  if (WSREP_ON && !is_trans_keyword())
+  {
     thd->wsrep_PA_safe= false;
+  }
 #endif /* WITH_WSREP */
 
   memset(&user, 0, sizeof(user));
