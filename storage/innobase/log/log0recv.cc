@@ -54,6 +54,7 @@ Created 9/20/1997 Heikki Tuuri
 #include "buf0rea.h"
 #include "srv0srv.h"
 #include "srv0start.h"
+#include <list>
 
 /** Read-ahead area in applying log records to file pages */
 #define RECV_READ_AHEAD_AREA	32U
@@ -543,11 +544,26 @@ struct file_name_t {
 	/** FSP_SIZE of tablespace */
 	ulint		size;
 
+	/** Freed pages of tablespace */
+	std::list<uint32_t> freed_pages;
+
 	/** Constructor */
 	file_name_t(std::string name_, bool deleted)
 		: name(std::move(name_)), space(NULL),
 		status(deleted ? DELETED: NORMAL),
 		size(0) {}
+
+	/** Add the freed pages */
+	void add_freed_page(uint32_t page_no)
+	{
+	  freed_pages.push_back(page_no);
+	}
+
+	/** Remove the freed pages */
+	void remove_freed_page(uint32_t page_no)
+	{
+	  freed_pages.remove(page_no);
+	}
 };
 
 /** Map of dirty tablespaces during recovery */
@@ -1764,6 +1780,34 @@ append:
                   log_phys_t(start_lsn, lsn, l, len));
 }
 
+static void store_freed_or_init_rec(page_id_t page_id, bool freed)
+{
+  uint32_t space_id= page_id.space();
+  uint32_t page_no= page_id.page_no();
+  if (is_predefined_tablespace(space_id))
+  {
+    fil_space_t* space;
+    if (space_id == TRX_SYS_SPACE)
+      space= fil_system.sys_space;
+    else
+      space= fil_space_get(space_id);
+
+    if (freed)
+      space->add_free_page(page_no);
+    else
+      space->remove_free_page(page_no);
+    return;
+  }
+
+  recv_spaces_t::iterator i= recv_spaces.lower_bound(space_id);
+  if (i != recv_spaces.end() && i->first == space_id)
+  {
+    if (freed)
+      i->second.add_freed_page(page_no);
+    else
+      i->second.remove_freed_page(page_no);
+  }
+}
 
 /** Parse and register one mini-transaction in log_t::FORMAT_10_5.
 @param checkpoint_lsn  the log sequence number of the latest checkpoint
@@ -1780,6 +1824,7 @@ bool recv_sys_t::parse(lsn_t checkpoint_lsn, store_t *store, bool apply)
 
   bool last_phase= (*store == STORE_IF_EXISTS);
   const byte *const end= buf + len;
+  recv_spaces_t::iterator it;
 loop:
   const byte *const log= buf + recovered_offset;
   const lsn_t start_lsn= recovered_lsn;
@@ -1963,6 +2008,7 @@ same_page:
       case INIT_PAGE:
         last_offset= FIL_PAGE_TYPE;
       free_or_init_page:
+	store_freed_or_init_rec(id, (b & 0x70) == FREE_PAGE);
         if (UNIV_UNLIKELY(rlen != 0))
           goto record_corrupted;
         break;
@@ -3239,6 +3285,11 @@ recv_init_crash_recovery_spaces(bool rescan, bool& missing_tablespace)
 			/* The tablespace was found, and there
 			are some redo log records for it. */
 			fil_names_dirty(rs.second.space);
+
+			/* Add the freed page ranges in the respective
+			tablespace */
+			for (auto page: rs.second.freed_pages)
+			  rs.second.space->add_free_page(page);
 		} else if (rs.second.name == "") {
 			ib::error() << "Missing FILE_CREATE, FILE_DELETE"
 				" or FILE_MODIFY before FILE_CHECKPOINT"
@@ -3252,6 +3303,7 @@ recv_init_crash_recovery_spaces(bool rescan, bool& missing_tablespace)
 
 		ut_ad(rs.second.status == file_name_t::DELETED
 		      || rs.second.name != "");
+		rs.second.freed_pages.clear();
 	}
 
 	if (flag_deleted) {
