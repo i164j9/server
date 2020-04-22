@@ -30,6 +30,9 @@
 --source include/have_debug_sync.inc
 --source include/have_binlog_format_row.inc
 
+call mtr.add_suppression("tc-heuristic-recover: Failed to open the binlog*");
+call mtr.add_suppression("tc-heuristic-recover failed during binary log rollback.");
+call mtr.add_suppression("Heuristic crash recovery of binary log failed.");
 call mtr.add_suppression("Can't init tc log");
 call mtr.add_suppression("Aborting");
 
@@ -59,13 +62,15 @@ EOF
 # Server restart
 #
 --echo TEST 1: Recovery with error
+#--exec $MYSQLD_LAST_CMD  --tc-heuristic-recover=ROLLBACK --debug-dbug=d,fault_injection_opening_binlog > $MYSQLTEST_VARDIR/log/mysqld.1.err 2>&1
 --error 1
---exec $MYSQLD_LAST_CMD  --tc-heuristic-recover=ROLLBACK --debug-dbug=d,fault_injection_opening_binlog > $MYSQLTEST_VARDIR/log/mysqld.1.err 2>&1
+--exec $MYSQLD_LAST_CMD  --tc-heuristic-recover=ROLLBACK --debug-dbug=d,fault_injection_opening_binlog
 --source include/wait_until_disconnected.inc
 
 --echo TEST 2: Recovery without error
+#--exec $MYSQLD_LAST_CMD --tc-heuristic-recover=ROLLBACK  > $MYSQLTEST_VARDIR/log/mysqld.1.err 2>&1
 --error 1
---exec $MYSQLD_LAST_CMD --tc-heuristic-recover=ROLLBACK  > $MYSQLTEST_VARDIR/log/mysqld.1.err 2>&1
+--exec $MYSQLD_LAST_CMD --tc-heuristic-recover=ROLLBACK
 --source include/wait_until_disconnected.inc
 
 --source include/start_mysqld.inc
@@ -82,3 +87,5 @@ SELECT @@GLOBAL.gtid_binlog_state;
 
 --disconnect master1
 --disconnect master2
+
+--cat_file $MYSQLTEST_VARDIR/log/mysqld.1.err
