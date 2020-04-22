@@ -1753,8 +1753,10 @@ bool dispatch_command(enum enum_server_command command, THD *thd,
   {
     mysqld_stmt_bulk_execute(thd, packet, packet_length);
 #ifdef WITH_WSREP
-    if (WSREP(thd))
+    if (WSREP_ON)
     {
+        assert(WSREP_ON);
+        assert(WSREP(thd));
         (void)wsrep_after_statement(thd);
     }
 #endif /* WITH_WSREP */

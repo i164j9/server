@@ -6742,6 +6742,8 @@ int MYSQL_BIN_LOG::rotate(bool force_rotate, bool* check_purge)
 #ifdef WITH_WSREP
   if (wsrep_to_isolation)
   {
+    assert(WSREP_ON);
+    assert(WSREP(current_thd));
     DBUG_ASSERT(WSREP(current_thd));
     *check_purge= false;
     WSREP_DEBUG("avoiding binlog rotate due to TO isolation: %d",

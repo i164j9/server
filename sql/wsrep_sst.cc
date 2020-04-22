@@ -367,9 +367,7 @@ void wsrep_sst_received (THD*                thd,
       my_pthread_setspecific_ptr(THR_THD, NULL);
     }
 
-    if (global_system_variables.wsrep_on &&
-        wsrep_provider &&
-	strcmp(wsrep_provider, WSREP_NONE))
+    if (WSREP_ON)
     {
       int const rcode(seqno < 0 ? seqno : 0);
       wsrep_sst_complete(thd,rcode);

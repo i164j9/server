@@ -5620,9 +5620,13 @@ bool mysql_create_like_table(THD* thd, TABLE_LIST* table,
   DBUG_ENTER("mysql_create_like_table");
 
 #ifdef WITH_WSREP
-  if (WSREP(thd) && !thd->wsrep_applier &&
+  if (WSREP_ON && !thd->wsrep_applier &&
       wsrep_create_like_table(thd, table, src_table, create_info))
+  {
+    assert(WSREP_ON);
+    assert(WSREP(thd));
     DBUG_RETURN(res);
+  }
 #endif
 
   /*

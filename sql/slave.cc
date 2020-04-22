@@ -3960,6 +3960,9 @@ apply_event_and_update_pos_apply(Log_event* ev, THD* thd, rpl_group_info *rgi,
 
 #ifdef WITH_WSREP
   if (WSREP_ON) {
+    assert(WSREP_ON);
+    assert(WSREP(thd));
+
     if (exec_res) {
       mysql_mutex_lock(&thd->LOCK_thd_data);
       switch(thd->wsrep_trx().state()) {
@@ -5609,8 +5612,10 @@ pthread_handler_t handle_slave_sql(void *arg)
     if (exec_relay_log_event(thd, rli, serial_rgi))
     {
 #ifdef WITH_WSREP
-      if (WSREP(thd))
+      if (WSREP_ON)
       {
+        assert(WSREP_ON);
+        assert(WSREP(current_thd));
         mysql_mutex_lock(&thd->LOCK_thd_data);
 
         if (thd->wsrep_cs().current_error())
@@ -5628,7 +5633,11 @@ pthread_handler_t handle_slave_sql(void *arg)
       {
         slave_output_error_info(serial_rgi, thd);
         if (WSREP_ON && rli->last_error().number == ER_UNKNOWN_COM_ERROR)
+	{
+          assert(WSREP_ON);
+          assert(WSREP(current_thd));
           wsrep_node_dropped= TRUE;
+	}
       }
       goto err;
     }
@@ -5767,6 +5776,8 @@ err_during_init:
   */
   if (WSREP_ON && wsrep_node_dropped && wsrep_restart_slave)
   {
+    assert(WSREP_ON);
+    assert(WSREP(thd));
     if (wsrep_ready_get())
     {
       WSREP_INFO("Slave error due to node temporarily non-primary"
